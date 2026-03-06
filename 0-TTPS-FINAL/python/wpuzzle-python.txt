@@ -1,0 +1,145 @@
+from collections import deque
+import sys
+input = sys.stdin.readline
+
+
+class Node:
+    def __init__(self):
+        self.outputs = set()
+        self.children = {}
+        self.failure_link = None
+
+    def has_child(self, key):
+        return key in self.children
+
+    def get_child(self, key):
+        return self.children.get(key)
+
+    def set_child(self, key, node):
+        self.children[key] = node
+
+    def add_output(self, output):
+        self.outputs.add(output)
+
+    def copy_outputs(self, node):
+        for o in node.outputs:
+            self.outputs.add(o)
+
+
+class AhoCorasick:
+    def __init__(self, patterns):
+        self.root = Node()
+
+        for pattern in patterns:
+            curr_node = self.root
+            for key in pattern:
+                if not curr_node.has_child(key):
+                    curr_node.set_child(key, Node())
+                curr_node = curr_node.get_child(key)
+            curr_node.add_output(pattern)
+
+        self.root.failure_link = self.root
+        queue = deque()
+
+        for key, child in self.root.children.items():
+            child.failure_link = self.root
+            queue.append((key, child))
+
+        while queue:
+            _, curr_node = queue.popleft()
+
+            for key, child in list(curr_node.children.items()):
+                failure = curr_node.failure_link
+                child.failure_link = failure.get_child(key) or self.root
+                child.copy_outputs(child.failure_link)
+                queue.append((key, child))
+
+            failure = curr_node.failure_link
+            for key in list(failure.children.keys()):
+                if not curr_node.has_child(key):
+                    curr_node.set_child(key, failure.get_child(key))
+
+    def search(self, text):
+        found = []
+        state = self.root
+        i = 0
+        while i < len(text):
+            c = text[i]
+            if state.has_child(c):
+                state = state.get_child(c)
+                i += 1
+                for val in state.outputs:
+                    found.append({
+                        "pos": i - len(val),
+                        "val": val
+                    })
+            else:
+                i += 1
+        return found
+
+
+DR = [-1, -1,  0,  1, 1,  1,  0, -1]
+DC = [ 0,  1,  1,  1, 0, -1, -1, -1]
+DN = ['A','B','C','D','E','F','G','H']
+
+
+def get_lines(grid, L, C, dr, dc):
+    starts = []
+    if dr == 0:
+        col_start = 0 if dc > 0 else C - 1
+        for r in range(L):
+            starts.append((r, col_start))
+    elif dc == 0:
+        row_start = 0 if dr > 0 else L - 1
+        for c in range(C):
+            starts.append((row_start, c))
+    else:
+        row_start = 0 if dr > 0 else L - 1
+        for c in range(C):
+            starts.append((row_start, c))
+        col_start = 0 if dc > 0 else C - 1
+        for r in range(1, L - 1):
+            starts.append((r, col_start))
+
+    lines = []
+    for (r0, c0) in starts:
+        text = []
+        r, c = r0, c0
+        while 0 <= r < L and 0 <= c < C:
+            text.append(grid[r][c])
+            r += dr
+            c += dc
+        if text:
+            lines.append((''.join(text), r0, c0))
+    return lines
+
+
+T = int(input())
+for _ in range(T):
+    L, C, W = map(int, input().split())
+    grid = []
+    for _ in range(L):
+        grid.append(input().strip())
+    words = []
+    for _ in range(W):
+        words.append(input().strip())
+
+    ac = AhoCorasick(words)
+    results = {}
+
+    for d in range(8):
+        dr, dc, dir_name = DR[d], DC[d], DN[d]
+        lines = get_lines(grid, L, C, dr, dc)
+        for (text, r0, c0) in lines:
+            matches = ac.search(text)
+            for match in matches:
+                word = match['val']
+                pos = match['pos']
+                real_r = r0 + dr * pos
+                real_c = c0 + dc * pos
+                if word not in results:
+                    results[word] = (real_r, real_c, dir_name)
+
+    for word in words:
+        r, c, d = results[word]
+        print(r, c, d)

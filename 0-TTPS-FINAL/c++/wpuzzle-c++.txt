@@ -1,0 +1,154 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+struct Node {
+    map<char, int> children;
+    int failure_link;
+    string output; // patron que termina aqui (vacio si ninguno)
+    Node() : failure_link(0) {}
+};
+
+vector<Node> trie;
+
+void build(const vector<string>& patterns) {
+    trie.clear();
+    trie.push_back(Node()); // raiz = 0
+
+    for (const string& pat : patterns) {
+        int curr = 0;
+        for (char c : pat) {
+            if (trie[curr].children.find(c) == trie[curr].children.end()) {
+                trie[curr].children[c] = trie.size();
+                trie.push_back(Node());
+            }
+            curr = trie[curr].children[c];
+        }
+        trie[curr].output = pat;
+    }
+
+    queue<int> q;
+    trie[0].failure_link = 0;
+    for (auto& [c, child] : trie[0].children) {
+        trie[child].failure_link = 0;
+        q.push(child);
+    }
+
+    while (!q.empty()) {
+        int v = q.front(); q.pop();
+        for (auto& [c, child] : trie[v].children) {
+            q.push(child);
+            int n = trie[v].failure_link;
+            while (n != 0 && trie[n].children.find(c) == trie[n].children.end()) {
+                n = trie[n].failure_link;
+            }
+            if (trie[n].children.find(c) != trie[n].children.end() && trie[n].children[c] != child) {
+                trie[child].failure_link = trie[n].children[c];
+            } else {
+                trie[child].failure_link = 0;
+            }
+            if (trie[child].output.empty()) {
+                trie[child].output = trie[trie[child].failure_link].output;
+            }
+        }
+    }
+}
+
+vector<pair<int,string>> search(const string& text) {
+    vector<pair<int,string>> found;
+    int state = 0;
+    int i = 0;
+    while (i < (int)text.size()) {
+        char c = text[i];
+        if (trie[state].children.count(c)) {
+            state = trie[state].children[c];
+            i++;
+            if (!trie[state].output.empty()) {
+                string val = trie[state].output;
+                int pos = i - val.size();
+                found.push_back({pos, val});
+            }
+        } else if (state == 0) {
+            i++;
+        } else {
+            state = trie[state].failure_link;
+        }
+    }
+    return found;
+}
+
+const int DR[] = {-1, -1,  0,  1, 1,  1,  0, -1};
+const int DC[] = { 0,  1,  1,  1, 0, -1, -1, -1};
+const char DN[] = {'A','B','C','D','E','F','G','H'};
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    int T;
+    cin >> T;
+
+    while (T--) {
+        int L, C, W;
+        cin >> L >> C >> W;
+
+        vector<string> grid(L);
+        for (int i = 0; i < L; i++) cin >> grid[i];
+
+        vector<string> words(W);
+        for (int i = 0; i < W; i++) cin >> words[i];
+
+        build(words);
+
+        map<string, tuple<int,int,char>> results;
+
+        for (int d = 0; d < 8; d++) {
+            int dr = DR[d], dc = DC[d];
+            char dir = DN[d];
+
+            vector<pair<int,int>> starts;
+
+            if (dr == 0) {
+                int col_start = (dc > 0) ? 0 : C - 1;
+                for (int r = 0; r < L; r++)
+                    starts.push_back({r, col_start});
+            } else if (dc == 0) {
+                int row_start = (dr > 0) ? 0 : L - 1;
+                for (int c = 0; c < C; c++)
+                    starts.push_back({row_start, c});
+            } else {
+                int row_start = (dr > 0) ? 0 : L - 1;
+                for (int c = 0; c < C; c++)
+                    starts.push_back({row_start, c});
+                int col_start = (dc > 0) ? 0 : C - 1;
+                for (int r = 1; r < L - 1; r++)
+                    starts.push_back({r, col_start});
+            }
+
+            for (auto [r0, c0] : starts) {
+                string line;
+                int r = r0, c = c0;
+                while (r >= 0 && r < L && c >= 0 && c < C) {
+                    line += grid[r][c];
+                    r += dr;
+                    c += dc;
+                }
+
+                auto matches = search(line);
+                for (auto [pos, word] : matches) {
+                    if (results.find(word) == results.end()) {
+                        int real_r = r0 + dr * pos;
+                        int real_c = c0 + dc * pos;
+                        results[word] = {real_r, real_c, dir};
+                    }
+                }
+            }
+        }
+
+        for (const string& word : words) {
+            auto [r, c, dir] = results[word];
+            cout << r << " " << c << " " << dir << "\n";
+        }
+    }
+
+    return 0;
+}
